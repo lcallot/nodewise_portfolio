@@ -1,0 +1,314 @@
+\documentclass[11pt,a4paper]{amsart}
+
+\usepackage{natbib}
+\usepackage{amsbsy,amsmath}
+\usepackage{amssymb,amsfonts}
+\usepackage{bbm}
+\usepackage{booktabs,url,enumerate}
+\usepackage{color,xcolor,colortbl}
+\usepackage{float}
+\usepackage{tikz}
+\usepackage{rotating,graphicx,lscape}
+\usepackage{commath}
+\usepackage{multirow}
+\usetikzlibrary{arrows,positioning} 
+\usepackage[hypcap]{caption}
+\newcommand{\sgn}{\mathrm{sign}}
+\usepackage{setspace}
+\usepackage{adjustbox}
+
+
+% Invisible table columns!
+\newcolumntype{H}{>{\setbox0=\hbox\bgroup}c<{\egroup}@{}}
+% Properly placed sideways table with asmart class. 
+\setlength\rotFPtop{0pt plus 1fil} 
+
+\usepackage[top=1.5cm, bottom=1.5cm, left=3.0cm, right=3.0cm]{geometry}
+\geometry{paperwidth=10in}
+
+\DeclareMathOperator{\Med}{\mathbb{M}ed}
+\DeclareMathOperator{\Mean}{\mathbb{M}ean}
+\DeclareMathOperator{\Cov}{\mathbb{C}ov}
+\DeclareMathOperator{\cov}{cov}
+\DeclareMathOperator{\tr}{tr}
+\DeclareMathOperator{\Var}{\mathbb{V}ar}
+\DeclareMathOperator{\E}{\mathbb{E}}
+\DeclareMathOperator{\nid}{NID}
+\DeclareMathOperator{\N}{\mathcal{N}}
+\DeclareMathOperator{\corr}{corr}
+\DeclareMathOperator{\diag}{diag}
+\DeclareMathOperator{\one}{\mathbf{1}}
+
+
+
+\begin{document}
+
+\title{A Nodewise Regression Approach to Estimating Large Portfolios: Empirical Application}   
+\author{Caner, Ulasan, Callot, \"Onder}
+\date{\today}
+\maketitle
+
+This document is generated from a \texttt{knitr} file which contains all the code necessary to replicate the tables in the application. To replicate these results, simply compile the file with the \texttt{knitr} package for \texttt{R}.
+
+
+
+<<init,eval=TRUE,echo=FALSE,cache=FALSE,results='hide',message=FALSE>>=
+  
+#	Loading required libraries. The dependencies should be installed as well. 
+library('xtable')
+library('reshape2') 
+library('ggplot2') 
+library('abind') 
+library('knitr') 
+library('lubridate') 
+library('scales')
+library('data.table')
+library('Hmisc')
+library('tables')
+
+#Sourcing the functions
+source('../code/roll.R')
+
+#Knitr global chunk settings, modify at your own risk.
+opts_chunk$set(fig.align='center'
+               , dev='pdf'
+               , fig.height=5
+               , cache=FALSE
+               , par=TRUE
+               , tidy=TRUE
+               , highlight=TRUE
+               , echo=FALSE
+               , eval=TRUE)
+@
+
+\section{Data}
+\subsection{Main Tables}
+Monthly data in the main text is spanning from January 1994 to May 2018 consisting of $ n=293 $ and $ p=304 $. Return target is set to 0.7974\% (monthly equivalent of 10\% for a year). Daily data starts from 2013-07-02 to 2018-04-30 with $ n=1216 $ and $ p=452 $. Return target is set to 0.0378\% (daily equivalent of 10\% for a year). In-sample and out-of-sample periods: 
+
+Monthly data:
+\begin{itemize}
+\item $ n_I=195 $, $ n-n_I=98 $.Out-of-sample 98 period covers  April 2010 to May 2018.
+\item $ n_I=173 $, $ n-n_I=120 $.Out-of-sample 120 period covers June 2008 to May 2018.
+\end{itemize}
+
+Daily data:
+\begin{itemize}
+\item $ n_I=1153 $, $ n-n_I=63 $. Out-of-sample 63 period covers 2018-01-30 to 2018-04-30.
+\item $ n_I=964 $, $ n-n_I=252 $. Out-of-sample 252 period covers 2017-05-01 to 2018-04-30.
+\end{itemize}
+
+\subsection{Supplementary Tables}
+We report extra tables for robustness checks in Appendix. Monthly data starts from August 2006 to April 2018 including $ n=141 $ and $ p=419 $. First daily data starts from 2017-06-01 to 2018-05-31 with $ n=252 $ and $ p=442 $. Second daily example starts from 2016-06-07 to 2018-05-31. $ n=500 $ and $ p=442 $. Return targets for monthly and daily data are set to 0.7974\% and 0.0378\%, respectively.
+
+Monthly data:
+\begin{itemize}
+\item $ n_I=93 $, $ n-n_I=48 $. Out-of-sample 48 period covers  May 2014 to April 2018.
+\item $ n_I=81 $, $ n-n_I=60 $. Out-of-sample 60 period covers  May 2013 to April 2018.
+\end{itemize}
+
+Daily data:
+\begin{itemize}
+\item $ n_I= 126 $, $ n-n_I=126 $. Out-of-sample 126 period covers 2017-11-29 to 2018-05-31 (First).
+\item $ n_I=437 $, $ n-n_I=63 $. Out-of-sample 63 period covers 2018-03-02 to 2018-05-31 (Second).
+\end{itemize}
+
+
+<<load,cache=TRUE>>=
+# Loading results
+load('../application/Ndw.Rda')
+@
+
+\section{Results}
+\clearpage
+<<pub-tab-m-1994-2018-98,results='asis'>>=
+gmtab   <- data.frame(melt(gpmc[[1]]))
+gmcast  <- dcast(gmtab, Portfolio + performance + Estimator  ~ TC )
+colnames(gmcast) <- c('Portfolio','Performance','Estimator','Without','With')
+ttab  <- tabular(Estimator ~ Heading()*Portfolio*Heading()*Performance*Heading()*Without*Heading()*mean,data=gmcast)
+tctab <- tabular(Estimator ~ Heading()*Portfolio*Heading()*Performance*Heading()*With*Heading()*mean,data=gmcast)
+# rbind results 
+Estimator  <- as.matrix(rbind(ttab,tctab))
+Estimator  <- Estimator[-1,]
+#format rows/cols
+colnames(Estimator) <- Estimator[1,]
+rownames(Estimator) <- Estimator[,1]
+Estimator=Estimator[-1,]
+Estimator=Estimator[,-1]
+
+# table column headers
+cgroup <- c('Global Minimum Portfolio', 'Markowitz Portfolio')
+rgroup <- c("without transaction cost", "with transaction cost")
+
+Estimator <- latex(Estimator, file="", col.just = strsplit("rrccrrcc", "")[[1]], rowlabel.just="r", cgroup = cgroup, n.cgroup = c(4, 4),rgroup = rgroup, n.rgroup=c(3,3), booktabs=T, caption='Monthly Porfolio Performance of $ n_I=195 $, $ n-n_I=98 $')
+
+@
+
+
+<<pub-tab-m-1994-2018-120,results='asis'>>=
+gmtab   <- data.frame(melt(gpmc[[2]]))
+gmcast  <- dcast(gmtab, Portfolio + performance + Estimator  ~ TC )
+colnames(gmcast) <- c('Portfolio','Performance','Estimator','Without','With')
+ttab  <- tabular(Estimator ~ Heading()*Portfolio*Heading()*Performance*Heading()*Without*Heading()*mean,data=gmcast)
+tctab <- tabular(Estimator ~ Heading()*Portfolio*Heading()*Performance*Heading()*With*Heading()*mean,data=gmcast)
+# rbind results 
+Estimator  <- as.matrix(rbind(ttab,tctab))
+Estimator  <- Estimator[-1,]
+#format rows/cols
+colnames(Estimator) <- Estimator[1,]
+rownames(Estimator) <- Estimator[,1]
+Estimator=Estimator[-1,]
+Estimator=Estimator[,-1]
+
+# table column headers
+cgroup <- c('Global Minimum Portfolio', 'Markowitz Portfolio')
+rgroup <- c("without transaction cost", "with transaction cost")
+
+Estimator <- latex(Estimator, file="", col.just = strsplit("rrccrrcc", "")[[1]], rowlabel.just="r", cgroup = cgroup, n.cgroup = c(4, 4),rgroup = rgroup, n.rgroup=c(3,3), booktabs=T, caption='Monthly Porfolio Performance of $ n_I=173 $, $ n-n_I=120 $')
+
+@
+
+\clearpage
+<<pub-tab-d-2013-2018-252,results='asis'>>=
+gmtab   <- data.frame(melt(gpmc[[4]]))
+gmcast  <- dcast(gmtab, Portfolio + performance + Estimator  ~ TC )
+colnames(gmcast) <- c('Portfolio','Performance','Estimator','Without','With')
+ttab  <- tabular(Estimator ~ Heading()*Portfolio*Heading()*Performance*Heading()*Without*Heading()*mean,data=gmcast)
+tctab <- tabular(Estimator ~ Heading()*Portfolio*Heading()*Performance*Heading()*With*Heading()*mean,data=gmcast)
+# rbind results 
+Estimator  <- as.matrix(rbind(ttab,tctab))
+Estimator  <- Estimator[-1,]
+#format rows/cols
+colnames(Estimator) <- Estimator[1,]
+rownames(Estimator) <- Estimator[,1]
+Estimator=Estimator[-1,]
+Estimator=Estimator[,-1]
+
+# table column headers
+cgroup <- c('Global Minimum Portfolio', 'Markowitz Portfolio')
+rgroup <- c("without transaction cost", "with transaction cost")
+
+Estimator <- latex(Estimator, file="", col.just = strsplit("rrccrrcc", "")[[1]], rowlabel.just="r", cgroup = cgroup, n.cgroup = c(4, 4),rgroup = rgroup, n.rgroup=c(3,3), booktabs=T, caption='Daily Porfolio Performance of $ n_I=964 $, $ n-n_I=252 $')
+
+@
+
+<<pub-tab-d-2013-2018-63,results='asis'>>=
+gmtab   <- data.frame(melt(gpmc[[3]]))
+gmcast  <- dcast(gmtab, Portfolio + performance + Estimator  ~ TC )
+colnames(gmcast) <- c('Portfolio','Performance','Estimator','Without','With')
+ttab  <- tabular(Estimator ~ Heading()*Portfolio*Heading()*Performance*Heading()*Without*Heading()*mean,data=gmcast)
+tctab <- tabular(Estimator ~ Heading()*Portfolio*Heading()*Performance*Heading()*With*Heading()*mean,data=gmcast)
+# rbind results 
+Estimator  <- as.matrix(rbind(ttab,tctab))
+Estimator  <- Estimator[-1,]
+#format rows/cols
+colnames(Estimator) <- Estimator[1,]
+rownames(Estimator) <- Estimator[,1]
+Estimator=Estimator[-1,]
+Estimator=Estimator[,-1]
+
+# table column headers
+cgroup <- c('Global Minimum Portfolio', 'Markowitz Portfolio')
+rgroup <- c("without transaction cost", "with transaction cost")
+
+Estimator <- latex(Estimator, file="", col.just = strsplit("rrccrrcc", "")[[1]], rowlabel.just="r", cgroup = cgroup, n.cgroup = c(4, 4),rgroup = rgroup, n.rgroup=c(3,3), booktabs=T, caption='Daily Porfolio Performance of $ n_I=1153 $, $ n-n_I=63 $')
+
+@
+
+
+\clearpage
+<<pub-tab-m-2006-2018-48,results='asis'>>=
+gmtab   <- data.frame(melt(gpmc[[5]]))
+gmcast  <- dcast(gmtab, Portfolio + performance + Estimator  ~ TC )
+colnames(gmcast) <- c('Portfolio','Performance','Estimator','Without','With')
+ttab  <- tabular(Estimator ~ Heading()*Portfolio*Heading()*Performance*Heading()*Without*Heading()*mean,data=gmcast)
+tctab <- tabular(Estimator ~ Heading()*Portfolio*Heading()*Performance*Heading()*With*Heading()*mean,data=gmcast)
+# rbind results 
+Estimator  <- as.matrix(rbind(ttab,tctab))
+Estimator  <- Estimator[-1,]
+#format rows/cols
+colnames(Estimator) <- Estimator[1,]
+rownames(Estimator) <- Estimator[,1]
+Estimator=Estimator[-1,]
+Estimator=Estimator[,-1]
+
+# table column headers
+cgroup <- c('Global Minimum Portfolio', 'Markowitz Portfolio')
+rgroup <- c("without transaction cost", "with transaction cost")
+
+Estimator <- latex(Estimator, file="", col.just = strsplit("rrccrrcc", "")[[1]], rowlabel.just="r", cgroup = cgroup, n.cgroup = c(4, 4),rgroup = rgroup, n.rgroup=c(3,3), booktabs=T, caption='Monthly Porfolio Performance of $ n_I=93 $, $ n-n_I=48 $')
+
+@
+
+
+<<pub-tab-m-2006-2018-60,results='asis'>>=
+gmtab   <- data.frame(melt(gpmc[[6]]))
+gmcast  <- dcast(gmtab, Portfolio + performance + Estimator  ~ TC )
+colnames(gmcast) <- c('Portfolio','Performance','Estimator','Without','With')
+ttab  <- tabular(Estimator ~ Heading()*Portfolio*Heading()*Performance*Heading()*Without*Heading()*mean,data=gmcast)
+tctab <- tabular(Estimator ~ Heading()*Portfolio*Heading()*Performance*Heading()*With*Heading()*mean,data=gmcast)
+# rbind results 
+Estimator  <- as.matrix(rbind(ttab,tctab))
+Estimator  <- Estimator[-1,]
+#format rows/cols
+colnames(Estimator) <- Estimator[1,]
+rownames(Estimator) <- Estimator[,1]
+Estimator=Estimator[-1,]
+Estimator=Estimator[,-1]
+
+# table column headers
+cgroup <- c('Global Minimum Portfolio', 'Markowitz Portfolio')
+rgroup <- c("without transaction cost", "with transaction cost")
+
+Estimator <- latex(Estimator, file="", col.just = strsplit("rrccrrcc", "")[[1]], rowlabel.just="r", cgroup = cgroup, n.cgroup = c(4, 4),rgroup = rgroup, n.rgroup=c(3,3), booktabs=T, caption='Monthly Porfolio Performance of $ n_I=81 $, $ n-n_I=60 $')
+
+@
+
+\clearpage
+<<pub-tab-d-2017-2018-126,results='asis'>>=
+gmtab   <- data.frame(melt(gpmc[[7]]))
+gmcast  <- dcast(gmtab, Portfolio + performance + Estimator  ~ TC )
+colnames(gmcast) <- c('Portfolio','Performance','Estimator','Without','With')
+ttab  <- tabular(Estimator ~ Heading()*Portfolio*Heading()*Performance*Heading()*Without*Heading()*mean,data=gmcast)
+tctab <- tabular(Estimator ~ Heading()*Portfolio*Heading()*Performance*Heading()*With*Heading()*mean,data=gmcast)
+# rbind results 
+Estimator  <- as.matrix(rbind(ttab,tctab))
+Estimator  <- Estimator[-1,]
+#format rows/cols
+colnames(Estimator) <- Estimator[1,]
+rownames(Estimator) <- Estimator[,1]
+Estimator=Estimator[-1,]
+Estimator=Estimator[,-1]
+
+# table column headers
+cgroup <- c('Global Minimum Portfolio', 'Markowitz Portfolio')
+rgroup <- c("without transaction cost", "with transaction cost")
+
+Estimator <- latex(Estimator, file="", col.just = strsplit("rrccrrcc", "")[[1]], rowlabel.just="r", cgroup = cgroup, n.cgroup = c(4, 4),rgroup = rgroup, n.rgroup=c(3,3), booktabs=T, caption='Daily Porfolio Performance of $ n_I=126 $, $ n-n_I=126 $')
+
+@
+
+
+<<pub-tab-d-2016-2018-63,results='asis'>>=
+gmtab   <- data.frame(melt(gpmc[[8]]))
+gmcast  <- dcast(gmtab, Portfolio + performance + Estimator  ~ TC )
+colnames(gmcast) <- c('Portfolio','Performance','Estimator','Without','With')
+ttab  <- tabular(Estimator ~ Heading()*Portfolio*Heading()*Performance*Heading()*Without*Heading()*mean,data=gmcast)
+tctab <- tabular(Estimator ~ Heading()*Portfolio*Heading()*Performance*Heading()*With*Heading()*mean,data=gmcast)
+# rbind results 
+Estimator  <- as.matrix(rbind(ttab,tctab))
+Estimator  <- Estimator[-1,]
+#format rows/cols
+colnames(Estimator) <- Estimator[1,]
+rownames(Estimator) <- Estimator[,1]
+Estimator=Estimator[-1,]
+Estimator=Estimator[,-1]
+
+# table column headers
+cgroup <- c('Global Minimum Portfolio', 'Markowitz Portfolio')
+rgroup <- c("without transaction cost", "with transaction cost")
+
+Estimator <- latex(Estimator, file="", col.just = strsplit("rrccrrcc", "")[[1]], rowlabel.just="r", cgroup = cgroup, n.cgroup = c(4, 4),rgroup = rgroup, n.rgroup=c(3,3), booktabs=T, caption='Daily Porfolio Performance of $ n_I=437 $, $ n-n_I=63 $')
+
+@
+
+\end{document}
