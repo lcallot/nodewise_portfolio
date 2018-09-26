@@ -1,0 +1,229 @@
+
+\documentclass[11pt, a4paper]{amsart}
+
+
+%\usepackage[authoryear]{natbib}
+%\usepackage[backend=bibtex]{biblatex}
+\bibliography{sim_bib}
+
+\usepackage{amsaddr}
+\usepackage{amsbsy,amsmath}
+\usepackage{amssymb,amsfonts}
+\usepackage{bbm}%give 1 with dbl vertical bar 
+\usepackage{booktabs,url,enumerate}
+\usepackage{color,xcolor,colortbl}
+\usepackage{float}
+\usepackage{tikz}
+\usepackage{rotating,graphicx,lscape}
+\usepackage{commath}
+\usetikzlibrary{arrows,positioning} 
+\usepackage[hypcap]{caption}
+\newcommand{\sgn}{\mathrm{sign}}
+\usepackage{setspace}
+
+
+% Invisible table columns!
+\newcolumntype{H}{>{\setbox0=\hbox\bgroup}c<{\egroup}@{}}% Properly placed sideways table with asmart class. 
+
+\setlength\rotFPtop{0pt plus 1fil} 
+
+
+\usepackage[top=1.5cm, bottom=1.5cm, left=3.0cm, right=3.0cm]{geometry}
+
+\DeclareMathOperator{\Med}{\mathbb{M}ed}
+\DeclareMathOperator{\Mean}{\mathbb{M}ean}
+\DeclareMathOperator{\Cov}{\mathbb{C}ov}
+\DeclareMathOperator{\cov}{cov}
+\DeclareMathOperator{\tr}{tr}
+\DeclareMathOperator{\Var}{\mathbb{V}ar}
+\DeclareMathOperator{\E}{\mathbb{E}}
+\DeclareMathOperator{\nid}{NID}
+\DeclareMathOperator{\N}{\mathcal{N}}
+\DeclareMathOperator{\corr}{corr}
+\DeclareMathOperator{\diag}{diag}
+\DeclareMathOperator{\one}{\mathbf{1}}
+
+%\onehalfspace
+
+\begin{document}
+	
+\title[Relaxed Approach to Estimating Large Portfolios]{A Relaxed Approach to Estimating Large Portfolios and Gross Exposure: paper figure generation}   
+
+\date{\today}
+\maketitle
+
+<<init,eval=TRUE,echo=FALSE,cache=FALSE,results='hide',message=FALSE>>=
+
+#	Loading required libraries. The dependencies should be installed as well. 
+library('reshape2') # formating the data for ggplot2
+library('ggplot2') # plotting 
+library('abind') # handling arrays
+library('knitr') # for kniting 
+library('viridis')
+library('ggthemes')
+#Sourcing the home-made functions
+source('../lib/lib_sim.R')
+
+#Knitr global chunk settings, modify at your won risk.
+opts_chunk$set( fig.align='center'
+	       , dev='pdf'
+	       , fig.height=4
+	       , out.width = "\\textwidth"
+	       , cache=FALSE
+	       , par=TRUE
+	       , tidy=TRUE
+	       , highlight=TRUE
+	       , echo=FALSE
+	       , eval=TRUE)
+
+@
+
+
+\section{Overview}
+
+This document is used to generate the figures for \textit{A Relaxed Approach to Estimating Large Portfolios and Gross Exposure}.
+
+<<load,cache=TRUE>>=
+# Loading the errors
+test_mc <- readRDS("sim_results_2018_GIC_1000.rds")
+
+
+# Aggregating the mc stats 
+pmc <- postmc(test_mc)
+# subsetting the portfolio stats
+ptf <- melt(pmc[['ptf']])
+#ptf <- subset(ptf,dgp!='SPD Chol')
+ptf$Estimator <- factor(ptf$Estimator,levels = levels(ptf$Estimator)[c(5,6,4,3,1,2)])
+ptf <- subset(ptf,!(Estimator%in%c('Factor')))
+ptf <- subset(ptf,!(dgp %in% c('SPD Chol', 'S&P Gaussian')))
+ptf$dgp <- factor(ptf$dgp)
+# risk
+rsk <- subset(ptf,measure=='Risk')
+rsk <- subset(rsk,!(Estimator%in%c('True','Sample')))
+# risk ratio
+rskratio <- subset(ptf,measure=='Risk_ratio')
+rskratio <- subset(rskratio,!(Estimator%in%c('True','Sample')))# & p>75)
+# Weight estimation error
+weights <- subset(ptf,measure=='Weights')
+weights <- subset(weights,!(Estimator%in%c('True','Sample')))
+# Exposure of the optimal ptfs
+exposure <- subset(ptf,measure=='Exposure')
+exposure <- subset(exposure,!(Estimator%in%c('True','Sample')))
+# risk diff
+rsk_diff <- subset(ptf,measure=='Risk_diff')
+rsk_diff <- subset(rsk_diff,!(Estimator%in%c('True','Sample')))
+
+# Risk vs random exposure constraints weights
+expo <- subset(melt(pmc[['exposure']]),stats!='Standard deviation'&measure=='Risk'&(!(Estimator%in%c('True','Sample','Factor'))))
+expw <- subset(melt(pmc[['exposure']]),stats!='Standard deviation'&measure=='Weights'&(!(Estimator=='Sample'&(p>150)))&(!(Estimator%in%c('True','Sample','Factor'))))
+
+# Time stats
+tme <- melt(pmc[['time']])
+# formating the exposure computation times. 
+exptme <- melt(apply(pmc[['time']][,,'Exposure',],c(1,3),mean,na.rm=TRUE))
+exptme$Estimator <- 'Exposure'
+exptme$Computation <- 'Estimation'
+# collating
+tme <- rbind(tme,exptme)
+tme <- subset(tme,Estimator%in%c('POET','NodeWise'))
+
+# nbr dgps for plot formatting
+ndgp <- length(unique(ptf$dgp))
+nexp <- length(unique(expo$Exposure))
+nptf <- length(unique(ptf$Portfolio))
+
+# Renaming levels
+levels(exposure$dgp) <- levels(rsk$dgp) <- levels(rskratio$dgp) <- levels(rsk_diff$dgp) <- levels(weights$dgp) <- c('Toeplitz', 'Factor','Student random covariance')
+levels(exposure$Portfolio) <- levels(rskratio$Portfolio) <- levels(rsk_diff$Portfolio) <- levels(rsk$Portfolio) <- levels(weights$Portfolio) <- c('Markowitz','Global minimum variance')
+
+@
+
+
+
+
+\subsection{Portfolio risk ratio (Theorems 3.1 and 3.2)}
+
+<<pub-plot-ptf-mean-ratio,warning=FALSE,dependson=load,cache=TRUE>>=
+gptf <- ggplot(subset(rskratio,stats=='Median' & !(dgp=='Toeplitz' & Estimator=='Ledoit-Wolf')),
+               aes(x=p,y=value,colour=Estimator,linetype=Estimator)) + geom_line() + facet_wrap(dgp ~ Portfolio ,scales = 'free',ncol=nptf) + theme_bw() + theme(legend.position = 'bottom') + scale_color_viridis(discrete = TRUE) + theme_tufte() + theme(legend.position = 'bottom') #+ ylim(c(0,1000))
+gptf
+@
+
+<<pub-plot-ptf-rmse-ratio,warning=FALSE,dependson=load,cache=TRUE,eval=FALSE>>=
+gptf <- ggplot(subset(rskratio,stats=='Root mean square'),
+               aes(x=p,y=value,colour=Estimator,linetype=Estimator)) + geom_line() + facet_wrap(dgp ~ Portfolio ,scales = 'free',ncol=nptf) + theme_bw() + theme(legend.position = 'bottom') + scale_color_viridis(discrete = TRUE) + theme_tufte() + theme(legend.position = 'bottom')
+gptf
+@
+
+%\clearpage
+%\newpage
+
+%\subsection{Portfolio risk  (corollaries 3.1 and 3.2)}
+
+<<pub-plot-ptf-mean,warning=FALSE,dependson=load,cache=TRUE,eval=FALSE>>=
+gptf <- ggplot(subset(rsk,stats=='Median'),
+               aes(x=p,y=value,colour=Estimator,linetype=Estimator)) + geom_line() + facet_wrap(dgp ~ Portfolio ,scales = 'free',ncol=nptf) + theme_bw() + theme(legend.position = 'bottom') + scale_color_viridis(discrete = TRUE) + theme_tufte() + theme(legend.position = 'bottom')
+gptf
+@
+
+
+\clearpage
+\newpage
+
+\subsection{Portfolio weights estimation error (Theorems 3.3 and 3.4)}
+
+
+<<pub-plot-weights-mean,warning=FALSE,dependson=load,cache=TRUE>>=
+grsk <- ggplot(subset(weights,stats=='Median'),
+               aes(x=p,y=value,colour=Estimator,linetype=Estimator)) + geom_line() + facet_wrap(dgp ~ Portfolio ,scales = 'free',ncol=nptf) + theme_bw() + theme(legend.position = 'bottom') + scale_color_viridis(discrete = TRUE) + theme_tufte() + theme(legend.position = 'bottom')
+grsk
+@
+
+
+<<pub-plot-weights-rmse,warning=FALSE,dependson=load,cache=TRUE,eval=FALSE>>=
+grsk <- ggplot(subset(weights,stats=='Root mean square'),
+               aes(x=p,y=value,colour=Estimator,linetype=Estimator)) + geom_line()+ facet_wrap(dgp ~ Portfolio ,scales = 'free',ncol=nptf) + theme_bw() + theme(legend.position = 'bottom') + scale_color_viridis(discrete = TRUE) + theme_tufte() + theme(legend.position = 'bottom')
+grsk
+@
+
+
+%\clearpage
+%\newpage
+%\subsection{Portfolio Exposure (Theorems 3.5 and 3.6)}
+
+<<pub-plot-exp-mean,warning=FALSE,dependson=load,cache=TRUE,eval=FALSE>>=
+gexp <- ggplot(subset(exposure,stats=='Median'),
+               aes(x=p,y=value,colour=Estimator,linetype=Estimator)) + geom_line() + facet_wrap(dgp ~ Portfolio ,scales = 'free',ncol=nptf) + theme_bw() + theme(legend.position = 'bottom') + scale_color_viridis(discrete = TRUE) + theme_tufte() + theme(legend.position = 'bottom')
+gexp
+@
+
+
+<<pub-plot-exp-rmse,warning=FALSE,dependson=load,cache=TRUE,eval=FALSE>>=
+gexp <- ggplot(subset(exposure,stats=='Root mean square'),
+               aes(x=p,y=value,colour=Estimator,linetype=Estimator)) + geom_line() + facet_wrap(dgp ~ Portfolio ,scales = 'free',ncol=nptf) + theme_bw() + theme(legend.position = 'bottom') + scale_color_viridis(discrete = TRUE) + theme_tufte() + theme(legend.position = 'bottom')
+gexp
+@
+
+\clearpage
+\newpage
+\subsection{Portfolio Risk Estimation Error (Theorems 3.5 and 3.6)}
+
+
+<<pub-plot-rd-mean,warning=FALSE,dependson=load,cache=TRUE>>=
+grd <- ggplot(subset(rsk_diff,stats=='Median'),
+               aes(x=p,y=value,colour=Estimator,linetype=Estimator)) + geom_line()+ facet_wrap(dgp ~ Portfolio ,scales = 'free',ncol=nptf) + theme_bw() + theme(legend.position = 'bottom') + scale_color_viridis(discrete = TRUE) + theme_tufte() + theme(legend.position = 'bottom')
+grd
+
+@
+
+
+<<pub-plot-rd-rmse,warning=FALSE,dependson=load,cache=TRUE,eval=FALSE>>=
+grd <- ggplot(subset(rsk_diff,stats=='Root mean square'),
+               aes(x=p,y=value,colour=Estimator,linetype=Estimator)) + geom_line() + facet_wrap(dgp ~ Portfolio ,scales = 'free',ncol=nptf) + theme_bw() + theme(legend.position = 'bottom') + scale_color_viridis(discrete = TRUE) + theme_tufte() + theme(legend.position = 'bottom')
+grd
+
+@
+
+
+
+\end{document}
