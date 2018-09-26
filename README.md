@@ -1,5 +1,5 @@
 # Repliation material for: "A Nodewise Regression Approach to Estimating Large Portfolios"
-# Mehmet Caner, Esra Ulasan, Laurent Callot, A. Özlem Önder
+### Mehmet Caner, Esra Ulasan, Laurent Callot, A. Özlem Önder
 
 ## Simulation results
 
